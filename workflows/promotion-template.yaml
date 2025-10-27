@@ -1,0 +1,87 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: promote-minusone-demo
+  namespace: argo
+spec:
+  serviceAccountName: argo
+  entrypoint: promote-to-production
+  arguments:
+    parameters:
+    - name: image-tag
+      description: "Docker image tag to promote from staging to production"
+    - name: version
+      description: "Version label for the deployment"
+
+  templates:
+  - name: promote-to-production
+    steps:
+    - - name: verify-staging
+        template: check-staging-health
+    - - name: get-staging-image
+        template: get-current-staging-image
+    - - name: deploy-to-production
+        templateRef:
+          name: deploy-minusone-demo
+          template: deploy
+        arguments:
+          parameters:
+          - name: environment
+            value: "production"
+          - name: image-tag
+            value: "{{workflow.parameters.image-tag}}"
+          - name: version
+            value: "{{workflow.parameters.version}}"
+    - - name: notify-success
+        template: notify
+
+  - name: check-staging-health
+    script:
+      image: argoproj/kubectl-argo-rollouts:latest
+      command: [bash]
+      source: |
+        set -e
+        echo "Checking staging rollout health..."
+
+        STATUS=$(kubectl argo rollouts status minusone-demo -n staging 2>&1 || true)
+        echo "Staging status: $STATUS"
+
+        if echo "$STATUS" | grep -q "Healthy"; then
+          echo "✓ Staging is healthy and ready for promotion"
+          exit 0
+        else
+          echo "✗ Staging is not healthy, cannot promote to production"
+          exit 1
+        fi
+
+  - name: get-current-staging-image
+    script:
+      image: bitnami/kubectl:latest
+      command: [bash]
+      source: |
+        set -e
+        IMAGE=$(kubectl get rollout minusone-demo -n staging \
+          -o jsonpath='{.spec.template.spec.containers[0].image}')
+        echo "Current staging image: $IMAGE"
+
+  - name: notify
+    script:
+      image: alpine:latest
+      command: [sh]
+      source: |
+        echo "================================================"
+        echo "✓ PROMOTION SUCCESSFUL"
+        echo "================================================"
+        echo "Version: {{workflow.parameters.version}}"
+        echo "Image Tag: {{workflow.parameters.image-tag}}"
+        echo "Promoted from: staging"
+        echo "Promoted to: production"
+        echo "================================================"
+        echo ""
+        echo "This simulates what Kargo would automate:"
+        echo "1. Verify staging is healthy"
+        echo "2. Extract image tag from staging"
+        echo "3. Deploy to production"
+        echo "4. Wait for production rollout"
+        echo "5. Notify on completion"
+        echo "================================================"

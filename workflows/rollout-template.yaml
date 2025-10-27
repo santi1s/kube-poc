@@ -1,0 +1,84 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: deploy-minusone-demo
+  namespace: argo
+spec:
+  serviceAccountName: argo
+  entrypoint: deploy
+  arguments:
+    parameters:
+    - name: environment
+      description: "Target environment (staging or production)"
+    - name: image-tag
+      description: "Docker image tag to deploy"
+    - name: version
+      description: "Version label for the deployment"
+
+  templates:
+  - name: deploy
+    steps:
+    - - name: update-image
+        template: update-rollout-image
+    - - name: wait-for-healthy
+        template: wait-rollout-healthy
+    - - name: verify-deployment
+        template: verify-health
+
+  - name: update-rollout-image
+    script:
+      image: bitnami/kubectl:latest
+      command: [bash]
+      source: |
+        set -e
+        ENVIRONMENT="{{workflow.parameters.environment}}"
+        IMAGE_TAG="{{workflow.parameters.image-tag}}"
+        VERSION="{{workflow.parameters.version}}"
+
+        echo "Updating Rollout in $ENVIRONMENT to image tag: $IMAGE_TAG"
+
+        # Update the image
+        kubectl set image rollout/minusone-demo \
+          minusone-demo=ghcr.io/santi1s/minusone-demo:$IMAGE_TAG \
+          -n $ENVIRONMENT
+
+        # Update the VERSION env var
+        kubectl set env rollout/minusone-demo \
+          VERSION=$VERSION \
+          -n $ENVIRONMENT
+
+        echo "Rollout updated successfully"
+
+  - name: wait-rollout-healthy
+    script:
+      image: argoproj/kubectl-argo-rollouts:latest
+      command: [bash]
+      source: |
+        set -e
+        ENVIRONMENT="{{workflow.parameters.environment}}"
+
+        echo "Waiting for rollout to become healthy in $ENVIRONMENT..."
+        kubectl argo rollouts status minusone-demo -n $ENVIRONMENT --watch --timeout 10m
+
+        echo "Rollout is healthy!"
+
+  - name: verify-health
+    script:
+      image: curlimages/curl:latest
+      command: [sh]
+      source: |
+        set -e
+        ENVIRONMENT="{{workflow.parameters.environment}}"
+
+        if [ "$ENVIRONMENT" = "staging" ]; then
+          SERVICE_URL="http://minusone-demo.staging.svc.cluster.local"
+        else
+          SERVICE_URL="http://minusone-demo.production.svc.cluster.local"
+        fi
+
+        echo "Verifying health endpoint: $SERVICE_URL/health"
+        RESPONSE=$(curl -s $SERVICE_URL/health)
+        echo "Response: $RESPONSE"
+
+        # Check if response contains "healthy"
+        echo "$RESPONSE" | grep -q "healthy" && echo "Health check passed!" || exit 1
