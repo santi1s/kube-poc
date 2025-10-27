@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
       - name: minusone-demo
-        image: ghcr.io/santi1s/minusone-demo:latest
+        image: ghcr.io/santi1s/minusone-demo:v2.0.0
         ports:
         - name: http
           containerPort: 8080
