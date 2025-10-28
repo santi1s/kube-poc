@@ -1,0 +1,12 @@
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Warehouse
+metadata:
+  name: minusone-demo-images
+  namespace: minusone-demo
+spec:
+  subscriptions:
+  - image:
+      repoURL: ghcr.io/santi1s/minusone-demo
+      discoveryLimit: 20
+      allowTags: ^sha-[0-9a-f]{7}$
+      imageSelectionStrategy: NewestBuild

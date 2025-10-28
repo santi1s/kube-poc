@@ -1,0 +1,39 @@
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: production
+  namespace: minusone-demo
+spec:
+  requestedFreight:
+  - origin:
+      kind: Warehouse
+      name: minusone-demo-images
+    sources:
+      stages:
+      - staging  # Only promote verified staging images
+  promotionTemplate:
+    spec:
+      steps:
+      - uses: argocd-update
+        config:
+          apps:
+          - name: minusone-demo-production
+            namespace: argocd
+      - uses: http
+        config:
+          url: http://kargo-webhook-eventsource-svc.argo-events.svc.cluster.local:12000/kargo
+          method: POST
+          headers:
+          - name: Content-Type
+            value: application/json
+          body: |
+            ${{ quote({
+              "stage": "production",
+              "freight": {
+                "images": [
+                  {
+                    "tag": imageFrom("ghcr.io/santi1s/minusone-demo").Tag
+                  }
+                ]
+              }
+            }) }}

@@ -37,15 +37,13 @@ spec:
 
         echo "Updating Rollout in $ENVIRONMENT to image tag: $IMAGE_TAG"
 
-        # Update the image
-        kubectl set image rollout/minusone-demo \
-          minusone-demo=ghcr.io/santi1s/minusone-demo:$IMAGE_TAG \
-          -n $ENVIRONMENT
+        # Update the image using kubectl patch
+        kubectl patch rollout minusone-demo -n $ENVIRONMENT --type='json' \
+          -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/image", "value":"ghcr.io/santi1s/minusone-demo:'$IMAGE_TAG'"}]'
 
         # Update the VERSION env var
-        kubectl set env rollout/minusone-demo \
-          VERSION=$VERSION \
-          -n $ENVIRONMENT
+        kubectl patch rollout minusone-demo -n $ENVIRONMENT --type='json' \
+          -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/env/0/value", "value":"'$VERSION'"}]'
 
         echo "Rollout updated successfully"
 
