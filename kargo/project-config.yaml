@@ -1,0 +1,9 @@
+apiVersion: kargo.akuity.io/v1alpha1
+kind: ProjectConfig
+metadata:
+  name: minusone-demo
+  namespace: minusone-demo
+spec:
+  promotionPolicies:
+  - stage: staging
+    autoPromotionEnabled: true
